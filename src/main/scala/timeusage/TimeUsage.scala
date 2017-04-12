@@ -115,6 +115,9 @@ object TimeUsage {
     * @param workColumns List of columns containing time spent working
     * @param otherColumns List of columns containing time spent doing other activities
     * @param df DataFrame whose schema matches the given column lists
+    *   *   people.select(when(people("gender") === "male", 0)
+    *     .when(people("gender") === "female", 1)
+    *     .otherwise(2))
     *
     * This methods builds an intermediate DataFrame that sums up all the columns of each group of activity into
     * a single column.
@@ -143,13 +146,40 @@ object TimeUsage {
     otherColumns: List[Column],
     df: DataFrame
   ): DataFrame = {
-    val workingStatusProjection: Column = ???
-    val sexProjection: Column = ???
-    val ageProjection: Column = ???
+    val workingStatusProjection: Column =
+      when(df("telfs") >= 1 && df("telfs") < 3, "working")
+        .otherwise("not working")
+        .as("working")
 
-    val primaryNeedsProjection: Column = ???
-    val workProjection: Column = ???
-    val otherProjection: Column = ???
+    val sexProjection: Column =
+      when(df("tesex") === 1, "male")
+        .otherwise("female")
+        .as("sex")
+
+    val ageProjection: Column =
+      when(df("teage") >= 15 && df("teage") <= 22, "young")
+        .when(df("teage") >= 23 && df("teage") <= 55, "active")
+        .otherwise("elder")
+        .as("age")
+
+    val primaryNeedsProjection: Column =
+      primaryNeedsColumns
+        .reduce(_+_)
+        .divide(60).
+        as("primaryNeeds")
+
+    val workProjection: Column =
+      workColumns
+        .reduce(_+_)
+        .divide(60)
+        .as("work")
+
+    val otherProjection: Column =
+      otherColumns
+        .reduce(_+_)
+        .divide(60)
+        .as("other")
+
     df
       .select(workingStatusProjection, sexProjection, ageProjection, primaryNeedsProjection, workProjection, otherProjection)
       .where($"telfs" <= 4) // Discard people who are not in labor force
@@ -173,7 +203,14 @@ object TimeUsage {
     * Finally, the resulting DataFrame should be sorted by working status, sex and age.
     */
   def timeUsageGrouped(summed: DataFrame): DataFrame = {
-    ???
+    summed
+      .groupBy("working", "sex", "age")
+      .agg(
+        round(avg("primaryNeeds"),1),
+        round(avg("work"),1),
+        round(avg("other"),1))
+      .orderBy("working", "sex", "age")
+
   }
 
   /**
